@@ -188,7 +188,7 @@ def main(args):
 
     cap3_joined_contigs = dict() # for writing joined fasta file
     all_joined_contigs = set() # for subsetting original contigs
-    until = 0
+
     for subject_link in blastx_joined_contigs:
         if len(blastx_joined_contigs[subject_link]) == 1:
             # only one BLASTX subject hit; ignore
@@ -209,10 +209,6 @@ def main(args):
         for v in join_info.values():
             all_joined_contigs.update(v)
 
-        if until > 1000:
-            break
-        until += 1
-
     if args.verbose:
         sys.stderr.write("[blast2cap3] writing unjoined contigs\n")
     unjoined_contigs = (contigs[k] for k in contigs if k not in all_joined_contigs)
@@ -221,14 +217,11 @@ def main(args):
     if args.verbose:
         sys.stderr.write("[blast2cap3] writing joined contigs\n")
     joined_contigs = list()
-    for joined_dict in cap3_joined_contigs:
-        if len(joined_dict) == 0:
-            continue
-        for joined in cap3_joined_contigs.values():
-            # cap3_joined_contigs is a dictionary with the subject
-            # protein as key
-            for seq_id, seq in joined.items():
-                joined_contigs.append(SeqRecord(seq, seq_id, ''))
+    for joined in cap3_joined_contigs.values():
+        # cap3_joined_contigs is a dictionary with the subject
+        # protein as key
+        for seq_id, seq in joined.items():
+            joined_contigs.append(SeqRecord(seq, seq_id, ''))
     SeqIO.write(joined_contigs, args.joined, "fasta")
 
 if __name__ == "__main__":

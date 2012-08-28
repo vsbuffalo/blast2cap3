@@ -5,6 +5,7 @@ sequence similarity to merge these candidate contigs by overlap.
 """
 
 import os
+from os.path import splitext, join
 import pdb
 import sys
 import shutil
@@ -14,9 +15,17 @@ import subprocess
 import tempfile
 import argparse
 
-from Bio import SeqIO
-from Bio.SeqRecord import SeqRecord
-
+try:
+    from Bio import SeqIO
+    from Bio.SeqRecord import SeqRecord
+except ImportError, e:
+    sys.exit("Cannot import BioPython modules; please install it.")
+    
+try:
+    import findorf
+except ImportError, e:
+    sys.exit("Cannot import findorf modules; please install it.")
+    
 def go_interactive(**kwargs):
     try:
         import readline
@@ -178,13 +187,14 @@ def load_exclude_file(file):
     file.close()
     return exclude
 
-def main(args):
+def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
+                   unjoined_file, joined_file, debug=True, verbose=True):
     """
     Run blast2cap3 with the argument input.
     """
-    exclude_ids = load_exclude_file(args.exclude)
-    blastx_joined_contigs = get_contig_links(args.blast)
-    contigs = SeqIO.to_dict(SeqIO.parse(args.contigs, "fasta"))
+    exclude_ids = load_exclude_file(exclude_file)
+    blastx_joined_contigs = get_contig_links(blast_results_file)
+    contigs = SeqIO.to_dict(SeqIO.parse(contigs_file, "fasta"))
 
     cap3_joined_contigs = dict() # for writing joined fasta file
     all_joined_contigs = set() # for subsetting original contigs
@@ -200,8 +210,8 @@ def main(args):
         # run_CAP3 on these sequences; pass in subject protein key for
         # FASTA header creation.
         join_contigs, join_info = run_CAP3(seqs, subject_link,
-                                           debug=args.debug,
-                                           verbose=args.verbose)
+                                           debug=debug,
+                                           verbose=verbose)
         cap3_joined_contigs[subject_link] = join_contigs
 
         # make a set of all contigs that were joined, as we want to
@@ -209,12 +219,12 @@ def main(args):
         for v in join_info.values():
             all_joined_contigs.update(v)
 
-    if args.verbose:
+    if verbose:
         sys.stderr.write("[blast2cap3] writing unjoined contigs\n")
     unjoined_contigs = (contigs[k] for k in contigs if k not in all_joined_contigs)
-    SeqIO.write(unjoined_contigs, args.unjoined, "fasta")
+    SeqIO.write(unjoined_contigs, unjoined_file, "fasta")
 
-    if args.verbose:
+    if verbose:
         sys.stderr.write("[blast2cap3] writing joined contigs\n")
     joined_contigs = list()
     for joined in cap3_joined_contigs.values():
@@ -222,7 +232,52 @@ def main(args):
         # protein as key
         for seq_id, seq in joined.items():
             joined_contigs.append(SeqRecord(seq, seq_id, ''))
-    SeqIO.write(joined_contigs, args.joined, "fasta")
+    SeqIO.write(joined_contigs, joined_file, "fasta")
+
+def join_files(a, b, dest):
+    with open(dest, 'w') as f:
+        shutil.copyfileobj(open(a, 'r'), f)
+        shutil.copyfileobj(open(b, 'r'), f)
+
+def main(exclude_file, blast_results_file, contigs_file,
+         unjoined_file, joined_file, iteration, databases, debug, verbose):
+    """
+    Run blast2cap3 standalone or iteratively.
+    """
+    # Enable iterartive approach, starting with the previous run as
+    # the first.
+    if args.iterations > 1:
+        # initial run; all files are those passed in directly. Output
+        # files are those numbered with iteration 0.
+
+        run_blast2cap3(exclude_file, blast_results_file, contigs_file,
+                       unjoined_file, joined_file, debug=debug, verbose=verbose)
+
+        for i in range(1, args.iterations):
+            # now, set the stage for iteration.
+
+            ## Remove all full length ORFs
+
+            # 1. Blast the joined file against relatives, and predict
+            # ORFs
+            findorf.blast.blast_all_relatives(joined_file, databases,
+                                              outdir=join("joined-blasts", str(i)))
+
+            # 2. Join the relative files. We use a names tuple that
+            # mimics the attribute interface of args (command like
+            # args from argparse)
+            for 
+            findorf.utilities.join_blastx(joined_file, )
+            
+            contigs_file = join_files(joined_file, contigs_file)
+            unjoined_file = 3
+
+            # first, try to predict ORFs using findorf.
+            findorf.blast.blast_all_relatives()
+    else:
+        run_blast2cap3(exclude_file, blast_results_file, contigs_file,
+                       unjoined_file, joined_file, debug=debug, verbose=verbose)
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=info)
@@ -239,11 +294,21 @@ if __name__ == "__main__":
                         default=False, action="store_true")
     parser.add_argument('-d', '--debug', help="don't delete CAP3 output",
                         default=False, action="store_true")
+    parser.add_argument('-i', '--iterations', type=int, 
+                        help="take merged contigs, try to find and remove ORFs via findorf "
+                        ", and try merging again",
+                        default=False)
     parser.add_argument('-j', '--joined', help="the filename to write joined contigs to",
                         default="joined.fasta", type=argparse.FileType('w'))
     parser.add_argument('-u', '--unjoined', help="the filename to write unjoined contigs to",
                         default="unjoined.fasta", type=argparse.FileType('w'))
-    
+    parser_blast.add_argument('databases', type=str, nargs="+",
+                              help="blast relative databases")
     args = parser.parse_args()
 
-    main(args)
+    # extract databases from the arg
+    databases = findorf.blast.extract_databases(databases)
+
+    main(args.exclude, args.blast, args.contigs, unjoined_file=args.unjoined,
+         joined_file=args.joined, iterations=args.iterations, databases=databases,
+         debug=args.debug, verbose=args.verbose)

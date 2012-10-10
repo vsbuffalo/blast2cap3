@@ -240,43 +240,12 @@ def join_files(a, b, dest):
         shutil.copyfileobj(open(b, 'r'), f)
 
 def main(exclude_file, blast_results_file, contigs_file,
-         unjoined_file, joined_file, iteration, databases, debug, verbose):
+         unjoined_file, joined_file, debug, verbose):
     """
     Run blast2cap3 standalone or iteratively.
     """
-    # Enable iterartive approach, starting with the previous run as
-    # the first.
-    if args.iterations > 1:
-        # initial run; all files are those passed in directly. Output
-        # files are those numbered with iteration 0.
-
-        run_blast2cap3(exclude_file, blast_results_file, contigs_file,
-                       unjoined_file, joined_file, debug=debug, verbose=verbose)
-
-        for i in range(1, args.iterations):
-            # now, set the stage for iteration.
-
-            ## Remove all full length ORFs
-
-            # 1. Blast the joined file against relatives, and predict
-            # ORFs
-            findorf.blast.blast_all_relatives(joined_file, databases,
-                                              outdir=join("joined-blasts", str(i)))
-
-            # 2. Join the relative files. We use a names tuple that
-            # mimics the attribute interface of args (command like
-            # args from argparse)
-            for 
-            findorf.utilities.join_blastx(joined_file, )
-            
-            contigs_file = join_files(joined_file, contigs_file)
-            unjoined_file = 3
-
-            # first, try to predict ORFs using findorf.
-            findorf.blast.blast_all_relatives()
-    else:
-        run_blast2cap3(exclude_file, blast_results_file, contigs_file,
-                       unjoined_file, joined_file, debug=debug, verbose=verbose)
+    run_blast2cap3(exclude_file, blast_results_file, contigs_file,
+                   unjoined_file, joined_file, debug=debug, verbose=verbose)
     
 
 if __name__ == "__main__":
@@ -294,21 +263,14 @@ if __name__ == "__main__":
                         default=False, action="store_true")
     parser.add_argument('-d', '--debug', help="don't delete CAP3 output",
                         default=False, action="store_true")
-    parser.add_argument('-i', '--iterations', type=int, 
-                        help="take merged contigs, try to find and remove ORFs via findorf "
-                        ", and try merging again",
-                        default=False)
     parser.add_argument('-j', '--joined', help="the filename to write joined contigs to",
                         default="joined.fasta", type=argparse.FileType('w'))
     parser.add_argument('-u', '--unjoined', help="the filename to write unjoined contigs to",
                         default="unjoined.fasta", type=argparse.FileType('w'))
-    parser_blast.add_argument('databases', type=str, nargs="+",
-                              help="blast relative databases")
     args = parser.parse_args()
 
-    # extract databases from the arg
-    databases = findorf.blast.extract_databases(databases)
+    # # extract databases from the arg
+    # databases = findorf.blast.extract_databases(databases)
 
     main(args.exclude, args.blast, args.contigs, unjoined_file=args.unjoined,
-         joined_file=args.joined, iterations=args.iterations, databases=databases,
-         debug=args.debug, verbose=args.verbose)
+         joined_file=args.joined, debug=args.debug, verbose=args.verbose)

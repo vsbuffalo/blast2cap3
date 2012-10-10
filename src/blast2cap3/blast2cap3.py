@@ -239,16 +239,7 @@ def join_files(a, b, dest):
         shutil.copyfileobj(open(a, 'r'), f)
         shutil.copyfileobj(open(b, 'r'), f)
 
-def main(exclude_file, blast_results_file, contigs_file,
-         unjoined_file, joined_file, debug, verbose):
-    """
-    Run blast2cap3 standalone or iteratively.
-    """
-    run_blast2cap3(exclude_file, blast_results_file, contigs_file,
-                   unjoined_file, joined_file, debug=debug, verbose=verbose)
-    
-
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description=info)
     parser.add_argument('-b', '--blast', help="tabular BLASTX output.",
                         type=argparse.FileType('r'),
@@ -271,6 +262,9 @@ if __name__ == "__main__":
 
     # # extract databases from the arg
     # databases = findorf.blast.extract_databases(databases)
+    run_blast2cap3(args.exclude, args.blast, args.contigs, unjoined_file=args.unjoined,
+                   joined_file=args.joined, debug=args.debug, verbose=args.verbose)
 
-    main(args.exclude, args.blast, args.contigs, unjoined_file=args.unjoined,
-         joined_file=args.joined, debug=args.debug, verbose=args.verbose)
+
+if __name__ == "__main__":
+    main()

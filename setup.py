@@ -17,8 +17,8 @@ setup(
         },
     url='http://github.com/DubcovskyLab/blast2cap3',
     license='GPL 2.0',
-    description='Try to join transcriptome sequencing contigs by leveraging BLASTX
+    description="""Try to join transcriptome sequencing contigs by leveraging BLASTX
 queries in protein space, and joining in using CAP3 in nucleotide
-space.',
+space.""",
     requires=["BioPython"]
     )   

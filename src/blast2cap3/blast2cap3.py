@@ -14,17 +14,16 @@ from collections import defaultdict
 import subprocess
 import tempfile
 import argparse
-
+import operator
 try:
+    from Bio.Alphabet import IUPAC
     from Bio import SeqIO
+    from Bio.Seq import Seq
     from Bio.SeqRecord import SeqRecord
 except ImportError, e:
     sys.exit("Cannot import BioPython modules; please install it.")
-    
-try:
-    import findorf
-except ImportError, e:
-    sys.exit("Cannot import findorf modules; please install it.")
+
+NUCLEOTIDES = IUPAC.IUPACAmbiguousDNA.letters
     
 def go_interactive(**kwargs):
     try:
@@ -108,7 +107,7 @@ def run_CAP3(sequences, subject_id, percent_identity=99, clipping=False,
                              int(clipping), min_overlap)
     full_cmd = "cd %s && " % tempdir + cmd_with_values
     if verbose:
-        sys.stderr.write("[run_CAP3] executing command: %s\n" % full_cmd)
+        sys.stderr.write("[run_CAP3] executing command on %d sequences: %s\n" % (len(sequences), full_cmd))
     status = subprocess.call(full_cmd, shell=True)
 
     if status != 0:
@@ -128,11 +127,11 @@ def run_CAP3(sequences, subject_id, percent_identity=99, clipping=False,
     joined_contigs_seqs = dict()
     with open(joined_contigs_file) as f:
         for record in SeqIO.parse(f, "fasta"):
-            new_id = ("joined-contig|subject-protein-link:%s|components:%s|cap3:%s" %
-                      (subject_id, ','.join(joined[record.id]), record.id))
+            new_id = ("%s|blast2cap3-joined, subject-protein-link:%s" %
+                      (';'.join(joined[record.id]), subject_id))
             joined_contigs_seqs[new_id] = record.seq
 
-            # write stats to standout
+            # write stats to stadout
             msg = "\t".join([subject_id, record.id]) + "\n"
             if debug:
                 msg += "cap3 dir: %s\n" % tempdir
@@ -187,8 +186,29 @@ def load_exclude_file(file):
     file.close()
     return exclude
 
+def clip_masked_ends(seq):
+    """
+    Clip masked sequence ends, returning BioPython Seq object.
+
+    """
+    assert(set(str(seq.seq.upper())).issubset(NUCLEOTIDES))
+    lc_nuc = NUCLEOTIDES.lower()
+    matcher = re.compile(r"^([%s]*)([%s%s]+?)([%s]*)$" % (lc_nuc, NUCLEOTIDES, lc_nuc, lc_nuc))
+    clipped_1, new_seq, clipped_2 = matcher.match(str(seq.seq)).groups()
+    assert(len(seq.seq) == sum(len(x) for x in (clipped_1, new_seq, clipped_2)))
+    return SeqRecord(Seq(new_seq), id=seq.id, description=seq.description)
+
+def hard_mask(seq, replace="X"):
+    """
+    Replace lower place nucleotides with a replace character.
+    """
+    
+    assert(set(str(seq.seq.upper())).issubset(NUCLEOTIDES))
+    new_seq = re.sub("[%s]" % NUCLEOTIDES.lower(), replace, str(seq.seq))
+    return SeqRecord(Seq(new_seq), id=seq.id, description=seq.description)
+   
 def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
-                   unjoined_file, joined_file, debug=True, verbose=True):
+                   unjoined_file, joined_file, remove_mask, debug=True, verbose=True):
     """
     Run blast2cap3 with the argument input.
     """
@@ -198,14 +218,19 @@ def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
 
     cap3_joined_contigs = dict() # for writing joined fasta file
     all_joined_contigs = set() # for subsetting original contigs
-
-    for subject_link in blastx_joined_contigs:
+    
+    tmp = blastx_joined_contigs.keys()[1:10]
+    for subject_link in tmp:
         if len(blastx_joined_contigs[subject_link]) == 1:
             # only one BLASTX subject hit; ignore
             continue
 
         # Make a dictionary of ids and sequences
         seqs = dict([(k, contigs[k]) for k in blastx_joined_contigs[subject_link]])
+
+        # if we remove masked sequence, do it here
+        if remove_mask:
+            seqs = dict([(k, hard_mask(seq)) for k, seq in contigs.iteritems()])
 
         # run_CAP3 on these sequences; pass in subject protein key for
         # FASTA header creation.
@@ -252,6 +277,8 @@ def main():
                         required=False, default=None, type=argparse.FileType('r'))
     parser.add_argument('-v', '--verbose', help="output status verbosely",
                         default=False, action="store_true")
+    parser.add_argument('-m', '--remove-masked', help="remove soft masked sequence",
+                        default=False, action="store_true")
     parser.add_argument('-d', '--debug', help="don't delete CAP3 output",
                         default=False, action="store_true")
     parser.add_argument('-j', '--joined', help="the filename to write joined contigs to",
@@ -260,10 +287,9 @@ def main():
                         default="unjoined.fasta", type=argparse.FileType('w'))
     args = parser.parse_args()
 
-    # # extract databases from the arg
-    # databases = findorf.blast.extract_databases(databases)
     run_blast2cap3(args.exclude, args.blast, args.contigs, unjoined_file=args.unjoined,
-                   joined_file=args.joined, debug=args.debug, verbose=args.verbose)
+                   joined_file=args.joined, remove_mask=args.remove_masked, debug=args.debug,
+                   verbose=args.verbose)
 
 
 if __name__ == "__main__":

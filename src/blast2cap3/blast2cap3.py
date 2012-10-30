@@ -69,20 +69,33 @@ def parse_CAP3_out(filename, verbose=True):
 
                 line = next(cap3_file)
                 while not line.startswith("*******************"):
-                    contig_id = "Contig" + contig_num
-                    joined[contig_id].append(line.strip()[:-1])
-
-                    # contig entries end in + or -; if not, let's
-                    # error our
-                    if line.strip()[-1:] not in ("+", "-"):
-                        raise ValueError("error: unexpected input while parsing CAP3. "
-                        "Were sequences clustered first using CD-HIT?")
-                    if verbose:
-                        sys.stderr.write("[parse_CAP3_out] adding '%s' to '%s'\n" %
-                                         (line.strip(), contig_id))
-                    line = next(cap3_file)
-                    if line.strip() == "" or line.startswith("DETAILED DISPLAY"):
+                    # in some cases, hardmasking sequences produces
+                    # cases in which one sequence fully clusters in
+                    # another. This is the case even if they were
+                    # first processed via CD-hit; consider the case in
+                    # which the difference in the sequences was only
+                    # in the softmkased region. These have cap3.out
+                    # lines as follows:
+                    #               k46_contig_7920+ is in k31_contig_8389+
+                    if re.match(r" *([^ ]+) is in ([^ ])", line) is not None:
+                        sys.stderr.write("[parse_CAP3_out] skipping full internal cluster: %s" % line.strip())
                         return joined
+                    else:
+                        contig_id = "Contig" + contig_num
+                        joined[contig_id].append(line.strip()[:-1])
+
+                        
+                        # contig entries end in + or -; if not, let's
+                        # error our
+                        if line.strip()[-1:] not in ("+", "-"):
+                            raise ValueError("error: unexpected input while parsing CAP3. "
+                                             "Were sequences clustered first using CD-HIT?")
+                        if verbose:
+                            sys.stderr.write("[parse_CAP3_out] adding '%s' to '%s'\n" %
+                                             (line.strip(), contig_id))
+                            line = next(cap3_file)
+                        if line.strip() == "" or line.startswith("DETAILED DISPLAY"):
+                            return joined
     except StopIteration:
         # empty file, most likely we may want to warn
         return joined
@@ -198,7 +211,7 @@ def clip_masked_ends(seq):
     assert(len(seq.seq) == sum(len(x) for x in (clipped_1, new_seq, clipped_2)))
     return SeqRecord(Seq(new_seq), id=seq.id, description=seq.description)
 
-def hard_mask(seq, replace="X"):
+def hard_mask(seq, replace="N"):
     """
     Replace lower place nucleotides with a replace character.
     """
@@ -219,8 +232,7 @@ def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
     cap3_joined_contigs = dict() # for writing joined fasta file
     all_joined_contigs = set() # for subsetting original contigs
     
-    tmp = blastx_joined_contigs.keys()[1:10]
-    for subject_link in tmp:
+    for subject_link in blastx_joined_contigs:
         if len(blastx_joined_contigs[subject_link]) == 1:
             # only one BLASTX subject hit; ignore
             continue
@@ -230,7 +242,7 @@ def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
 
         # if we remove masked sequence, do it here
         if remove_mask:
-            seqs = dict([(k, hard_mask(seq)) for k, seq in contigs.iteritems()])
+            seqs = dict([(k, hard_mask(seq)) for k, seq in seqs.iteritems()])
 
         # run_CAP3 on these sequences; pass in subject protein key for
         # FASTA header creation.

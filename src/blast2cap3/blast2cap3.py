@@ -199,6 +199,17 @@ def load_exclude_file(file):
     file.close()
     return exclude
 
+def contains_masked(seq):
+    """
+    Return whether a SeqRecord contains soft masking.
+    """
+    assert(set(str(seq.seq.upper())).issubset(NUCLEOTIDES))
+    lc_nuc = set(NUCLEOTIDES.lower())
+    for letter in seq.seq:
+        if letter in lc_nuc:
+            return True
+    return False
+
 def clip_masked_ends(seq):
     """
     Clip masked sequence ends, returning BioPython Seq object.
@@ -220,8 +231,9 @@ def hard_mask(seq, replace="N"):
     new_seq = re.sub("[%s]" % NUCLEOTIDES.lower(), replace, str(seq.seq))
     return SeqRecord(Seq(new_seq), id=seq.id, description=seq.description)
    
-def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
-                   unjoined_file, joined_file, remove_mask, debug=True, verbose=True):
+def run_blast2cap3(exclude_file, blast_results_file, contigs_file, 
+                   unjoined_file, joined_file, remove_masked, ignore_masked,
+                   debug=True, verbose=True):
     """
     Run blast2cap3 with the argument input.
     """
@@ -241,8 +253,10 @@ def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
         seqs = dict([(k, contigs[k]) for k in blastx_joined_contigs[subject_link]])
 
         # if we remove masked sequence, do it here
-        if remove_mask:
+        if remove_masked:
             seqs = dict([(k, hard_mask(seq)) for k, seq in seqs.iteritems()])
+        if ignore_masked:
+            seqs = dict([(k, seq) for k, seq in seqs.iteritems() if not contains_masked(seq)])
 
         # run_CAP3 on these sequences; pass in subject protein key for
         # FASTA header creation.
@@ -289,6 +303,8 @@ def main():
                         required=False, default=None, type=argparse.FileType('r'))
     parser.add_argument('-v', '--verbose', help="output status verbosely",
                         default=False, action="store_true")
+    parser.add_argument('-i', '--ignore-masked', help="ignore all cases in which there is soft-masking",
+                        default=False, action="store_true")
     parser.add_argument('-m', '--remove-masked', help="remove soft masked sequence",
                         default=False, action="store_true")
     parser.add_argument('-d', '--debug', help="don't delete CAP3 output",
@@ -299,8 +315,11 @@ def main():
                         default="unjoined.fasta", type=argparse.FileType('w'))
     args = parser.parse_args()
 
+    if args.ignore_masked and args.remove_masked:
+        raise ValueError("choose either --ignore-masked and --removed-masked, not both")
+
     run_blast2cap3(args.exclude, args.blast, args.contigs, unjoined_file=args.unjoined,
-                   joined_file=args.joined, remove_mask=args.remove_masked, debug=args.debug,
+                   joined_file=args.joined, remove_masked=args.remove_masked, ignore_masked=args.ignore_masked,
                    verbose=args.verbose)
 
 

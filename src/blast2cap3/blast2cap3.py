@@ -140,7 +140,7 @@ def run_CAP3(sequences, subject_id, percent_identity=99, clipping=False,
     joined_contigs_seqs = dict()
     with open(joined_contigs_file) as f:
         for record in SeqIO.parse(f, "fasta"):
-            new_id = ("%s|blast2cap3-joined, subject-protein-link:%s" %
+            new_id = ("%s blast2cap3-joined, subject-protein-link:%s" %
                       (';'.join(joined[record.id]), subject_id))
             joined_contigs_seqs[new_id] = record.seq
 
@@ -282,7 +282,7 @@ def run_blast2cap3(exclude_file, blast_results_file, contigs_file,
         # cap3_joined_contigs is a dictionary with the subject
         # protein as key
         for seq_id, seq in joined.items():
-            joined_contigs.append(SeqRecord(seq, seq_id, ''))
+            joined_contigs.append(SeqRecord(seq, id=seq_id, description=''))
     SeqIO.write(joined_contigs, joined_file, "fasta")
 
 def join_files(a, b, dest):

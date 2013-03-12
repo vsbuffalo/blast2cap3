@@ -53,7 +53,5 @@ prediction, `blast2cap3`, etc may be a good strategy.
 
 ## Citation
 
-If you use this software, please cite:
-
-Vince Buffalo, Ksenia Krasileva, and Jorge Dubcovsky, "blast2cap3:
-transcriptome contig merging via protein homology", 2012.
+Please contact vsbuffaloAAAAA@gmail.com (with the poly-A tail removed)
+if you wish to cite this program in your work.
